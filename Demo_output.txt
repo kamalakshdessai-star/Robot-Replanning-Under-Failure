@@ -1,0 +1,125 @@
+"root":{9 items
+"taskVersion":{4 items
+"versionNumber":int1
+"name":string"robot-replanning-executive-functions"
+"description":string"Tests executive functions in LLMs: weighted scoring by difficulty, speed bonus, verbosity bonus, and strict 90% accuracy threshold across 20 robot replanning scenarios."
+"definition":string"@kbench.task( name="robot-replanning-executive-functions", description="Tests executive functions in LLMs: weighted scoring by difficulty, speed bonus, verbosity bonus, and strict 90% accuracy threshold across 20 robot replanning scenarios." ) def robot_replan(llm, id, task, completed, failure, constraint, bad_steps, max_steps, difficulty) -> float: completed_str = "\n".join(f" - {s}" for s in completed) if completed else " (none yet)" prompt = f"""You are controlling a robot arm. A task was in progress but a failure occurred. ORIGINAL TASK: {task} CONSTRAINT: {constraint} STEPS ALREADY COMPLETED (do NOT repeat these): {completed_str} FAILURE: {failure} Write a new plan to complete the remaining goal. - Number each step (1. 2. 3. ...) - Do NOT include any already-completed steps - Strictly respect ALL constraints - Be as concise and efficient as possible""" # ── MEASURE SPEED ───────────────────────────────────────────────────────── start = time.time() response = llm.prompt(prompt) elapsed = time.time() - start # ── MEASURE VERBOSITY ───────────────────────────────────────────────────── word_count = len(response.split()) numbered_lines = [l.strip() for l in response.strip().split('\n') if l.strip() and l.strip()[0].isdigit()] step_count = len(numbered_lines) # ── TRACK CHECKS PASSED ─────────────────────────────────────────────────── checks_passed = 0 # HARD CHECK 1: Numbered list has_numbers = bool(__import__('re').search(r'\d+\.', response)) if has_numbers: checks_passed += 1 # HARD CHECK 2: No repeated steps no_repeats = True for step in bad_steps: key_words = [w for w in step.lower().split() if len(w) > 4] for word in key_words: if response.lower().count(word) > 1: no_repeats = False if no_repeats: checks_passed += 1 # HARD CHECK 3: Efficient step count if step_count <= max_steps + 1: checks_passed += 1 # HARD CHECK 4: No constraint violation no_violation = ( "carry both" not in response.lower() and "pick up both" not in response.lower() and "grab both" not in response.lower() ) if no_violation: checks_passed += 1 # JUDGE CHECKS 5-9: 5 criteria, each counts as 1 assessment = kbench.assertions.assess_response_with_judge( response_text=response, judge_llm=kbench.judge_llm, criteria=[ "The plan must NOT repeat any step that was listed as already completed.", "The plan must directly address the failure and propose a concrete alternative.", f"The plan must strictly respect this constraint: {constraint}", "The plan must be logically coherent — steps follow sensible physical order.", f"For a '{difficulty}' scenario: trick scenarios need 0-1 steps if task is done/impossible.", ] ) judge_passes = sum(1 for r in assessment.results if r.passed) checks_passed += judge_passes # ── CALCULATE ACCURACY ──────────────────────────────────────────────────── accuracy = checks_passed / TOTAL_CHECKS # e.g. 8/9 = 0.888 # ── CALCULATE FINAL SCORE ───────────────────────────────────────────────── diff_weight = DIFFICULTY_WEIGHTS[difficulty] sp_bonus = speed_bonus(elapsed) vb_bonus = verbosity_bonus(word_count) if accuracy == 1.0: # Perfect — full weighted score + bonuses final_score = diff_weight + sp_bonus + vb_bonus elif accuracy >= (8/9): # Partial credit zone — bonuses only, no difficulty multiplier final_score = sp_bonus + vb_bonus else: # Too many failures — zero final_score = 0.0 # ── ASSERT USING SCORE ──────────────────────────────────────────────────── # Normalize to 0-1 range for kbench (max possible = trick(5) + speed(0.3) + verbosity(0.2) = 5.5) MAX_POSSIBLE = 5.5 normalized = final_score / MAX_POSSIBLE kbench.assertions.assert_true( normalized > 0, expectation=( f"[id={id}] difficulty={difficulty} | " f"checks={checks_passed}/{TOTAL_CHECKS} | " f"accuracy={accuracy:.1%} | " f"speed={elapsed:.1f}s(+{sp_bonus}) | " f"words={word_count}(+{vb_bonus}) | " f"steps={step_count}/{max_steps} | " f"score={final_score:.2f}/{MAX_POSSIBLE}" ) ) return normalized "
+}
+"modelVersion":{1 item
+"slug":string"anthropic/claude-haiku-4-5@20251001"
+}
+"state":string"BENCHMARK_TASK_RUN_STATE_COMPLETED"
+"startTime":string"2026-04-13T12:07:33.418277Z"
+"endTime":string"2026-04-13T12:07:36.582887Z"
+"conversations":[2 items
+0:{4 items
+"id":string"robot-replanning-executive-functions-33eb7707"
+"requests":[1 item
+0:{3 items
+"contents":[2 items
+0:{3 items
+"parts":[1 item
+0:{1 item
+"text":string"You are controlling a robot arm. A task was in progress but a failure occurred. ORIGINAL TASK: Pick yellow cube and stack it on red block. CONSTRAINT: Carry one object at a time. Yellow cube is currently held. STEPS ALREADY COMPLETED (do NOT repeat these): - Moved to yellow cube - Picked up yellow cube - Moved to red block FAILURE: Red block moved by external force — now in zone D. Yellow cube still in gripper. Write a new plan to complete the remaining goal. - Number each step (1. 2. 3. ...) - Do NOT include any already-completed steps - Strictly respect ALL constraints - Be as concise and efficient as possible"
+}
+]
+"role":string"CONTENT_ROLE_USER"
+"senderName":string"User"
+}
+1:{3 items
+"parts":[1 item
+0:{1 item
+"text":string"# New Plan to Complete Task 1. Move to zone D 2. Place yellow cube on red block 3. Release gripper"
+}
+]
+"role":string"CONTENT_ROLE_ASSISTANT"
+"senderName":string"anthropic/claude-haiku-4-5@20251001"
+}
+]
+"metrics":{5 items
+"inputTokens":int172
+"outputTokens":int31
+"inputTokensCostNanodollars":string"172000"
+"outputTokensCostNanodollars":string"155000"
+"totalBackendLatencyMs":string"871"
+}
+"id":string"robot-replanning-executive-functions-33eb7707-req-1"
+}
+]
+"metrics":{5 items
+"inputTokens":int172
+"outputTokens":int31
+"inputTokensCostNanodollars":string"172000"
+"outputTokensCostNanodollars":string"155000"
+"totalBackendLatencyMs":string"871"
+}
+"modelVersionSlug":string"model_version_slug for conversation is DEPRECATED"
+}
+1:{4 items
+"id":string"Response assessment with google/gemini-3.1-flash-lite-preview-e6ab6015"
+"requests":[1 item
+0:{3 items
+"contents":[2 items
+0:{3 items
+"parts":[1 item
+0:{1 item
+"text":string" You are an impartial and strict technical evaluator. ### Task Verify if the **Generated Response** complies strictly with the **Criteria**. ### Input Data **Generated Response:** # New Plan to Complete Task 1. Move to zone D 2. Place yellow cube on red block 3. Release gripper **Criteria:** 1. The plan must NOT repeat any step that was listed as already completed. 2. The plan must directly address the failure and propose a concrete alternative. 3. The plan must strictly respect this constraint: Carry one object at a time. Yellow cube is currently held. 4. The plan must be logically coherent — steps follow sensible physical order. 5. For a 'hard' scenario: trick scenarios need 0-1 steps if task is done/impossible. ### Evaluation Protocol 1. Analyze the response against the criteria. 2. Be strict. If the text is ambiguous, the check fails. 3. Output your assessment using the specific structure requested below. "
+}
+]
+"role":string"CONTENT_ROLE_USER"
+"senderName":string"User"
+}
+1:{3 items
+"parts":[1 item
+0:{1 item
+"text":string""{\"results\":[{\"criterion\":\"The plan must NOT repeat any step that was listed as already completed.\",\"passed\":true,\"reason\":\"The steps (move, place, release) are new actions required to finish the task, and no previous completion steps were provided to compare against, so it does not repeat known completions.\",\"confidence\":5},{\"criterion\":\"The plan must directly address the failure and propose a concrete alternative.\",\"passed\":true,\"reason\":\"The plan explicitly outlines a sequence to move to the target zone and place the held object, which addresses the task failure.\",\"confidence\":5},{\"criterion\":\"The plan must strictly respect this constraint: Carry one object at a time. Yellow cube is currently held.\",\"passed\":true,\"reason\":\"The plan only involves the yellow cube currently being held and does not attempt to pick up any additional objects.\",\"confidence\":5},{\"criterion\":\"The plan must be logically coherent \u2014 steps follow sensible physical order.\",\"passed\":true,\"reason\":\"Moving to the location before placing and releasing the object is the correct physical sequence.\",\"confidence\":5},{\"criterion\":\"For a 'hard' scenario: trick scenarios need 0-1 steps if task is done/impossible.\",\"passed\":true,\"reason\":\"The scenario provided was not identified as a 'trick' or 'impossible' task, therefore the 0-1 step constraint for those specific cases does not apply.\",\"confidence\":4}]}""
+}
+]
+"role":string"CONTENT_ROLE_ASSISTANT"
+"senderName":string"google/gemini-3.1-flash-lite-preview"
+}
+]
+"metrics":{5 items
+"inputTokens":int430
+"outputTokens":int386
+"inputTokensCostNanodollars":string"107500"
+"outputTokensCostNanodollars":string"579000"
+"totalBackendLatencyMs":string"1948"
+}
+"id":string"Response assessment with google/gemini-3.1-flash-lite-preview-e6ab6015-req-1"
+}
+]
+"metrics":{5 items
+"inputTokens":int430
+"outputTokens":int386
+"inputTokensCostNanodollars":string"107500"
+"outputTokensCostNanodollars":string"579000"
+"totalBackendLatencyMs":string"1948"
+}
+"modelVersionSlug":string"model_version_slug for conversation is DEPRECATED"
+}
+]
+"results":[1 item
+0:{2 items
+"type":string"AGGREGATED"
+"numericResult":{1 item
+"value":float0.6363636363636364
+}
+}
+]
+"assertions":[1 item
+0:{5 items
+"expectation":string"[id=17] difficulty=hard | checks=9/9 | accuracy=100.0% | speed=1.0s(+0.3) | words=21(+0.2) | steps=3/3 | score=3.50/5.5"
+"status":string"BENCHMARK_TASK_RUN_ASSERTION_STATUS_PASSED"
+"lineNumber":int157
+"definition":string"kbench.assertions.assert_true("
+"conversationRequestIds":[1 item
+0:{2 items
+"conversationId":string"robot-replanning-executive-functions-33eb7707"
+"requestId":string"robot-replanning-executive-functions-33eb7707-req-1"
+}
+]
+}
+]
+"pyRunId":string"robot-replanning-executive-functions-Run #17"
+}
